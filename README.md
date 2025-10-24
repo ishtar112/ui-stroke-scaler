@@ -20,12 +20,6 @@ Do **not** copy and paste the raw source code — the client script is meant to 
   * **StarterGui** — caches all UIStrokes that are descendants of `StarterGui`
   * **All** — caches all UIStrokes in the game
   * **Cached** — updates all UIStrokes that have already been cached
-* **Setting Thickness scale** — UIStrokes' scale is based on its `Thickness` and its `Parent`'s `AbsoluteSize` when cached
-  * First, set the `Parent` to the desired size
-  * Then set the desired UIStroke `Thickness`
-  * Lastly, cache the UIStroke using any of the ways mentioned above
-  * As the `Parent`'s size changes during gameplay, the `UIStroke` will automatically resize itself to maintain a consistent thickness
+* **Setting Thickness scale** — set the `Parent` to the desired size, then set the desired UIStroke `Thickness`, and cache the `UIStroke` using any of the ways mentioned above: the `UIStroke` will automatically adjust its `Thickness` as its `Parent` changes size during gameplay
   * ‼️ **When testing different devices when editing in Studio, UIStrokes will look weird**; UIStrokes only resize at runtime
-* **Removing UIStrokes** — UIStrokes can be easily removed from the auto-adjuster at any time
-  * Just remove the `@scale` tag from the UIStroke
-  * Or use the `Clear` plugin button if you want to un-cache **all** UIStrokes
+* **Removing UIStrokes** — UIStrokes can be easily removed from the auto-adjuster at any time: just remove the `@scale` tag from the UIStroke, or use the `Clear` plugin button to instantly un-cache **all** UIStrokes
