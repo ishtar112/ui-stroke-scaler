@@ -14,7 +14,7 @@
 local TAG = "@scaled" -- tag applied to scaled UIStrokes
 local ATTRIBUTE = "scale" -- UIStroke attribute used to calculate thickness
 
-local ADJUSTER = script:FindFirstChild("UIStrokeScaler")
+local ADJUSTER = script.Parent:FindFirstChild("UIStrokeScaler")
 local ADJUSTER_PARENT = game:GetService('StarterPlayer'):FindFirstChild('StarterPlayerScripts')
 
 local ContextualApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
@@ -31,6 +31,8 @@ local AddTag = script.AddTag
 local RemoveTag = script.RemoveTag
 local SetAttribute = script.SetAttribute
 local IsDescendantOf = script.IsDescendantOf
+local GetDescendants = script.GetDescendants
+local FindFirstChildWhichIsA = script.FindFirstChildWhichIsA
 
 @native local function getUIStrokes( instances: { Instance } ): ...UIStroke
 	local len = #instances
@@ -108,7 +110,7 @@ local function cacheUIStrokes( ...: UIStroke )
 			else
 			(parent :: GuiObject).AbsoluteSize
 		
-		local denominator = if bounds.X < bounds.Y then bounds.X else bounds.Y
+		local denominator = math.min(bounds.X, bounds.Y)
 		local scale = stroke.Thickness / denominator
 		
 		AddTag(stroke, TAG)
@@ -137,11 +139,11 @@ local function cacheDescendants()
 	end
 	
 	for _, instance in selected do
-		if instance:FindFirstChildWhichIsA("UIStroke", true) == nil then
+		if FindFirstChildWhichIsA(instance, "UIStroke", true) == nil then
 			continue
 		end
 		
-		for _, descendant in instance:GetDescendants() do
+		for _, descendant in GetDescendants(instance) do
 			table.insert(instances, descendant)
 			-- kind of crude b/c we aren't preventing duplicate entries, but oh well
 		end
@@ -151,11 +153,11 @@ local function cacheDescendants()
 end
 
 local function cacheStarterGui()
-	cacheUIStrokes(getUIStrokes(StarterGui:GetDescendants()))
+	cacheUIStrokes(getUIStrokes(GetDescendants(StarterGui)))
 end
 
 local function cacheAll()
-	cacheUIStrokes(getUIStrokes(game:GetDescendants()))
+	cacheUIStrokes(getUIStrokes(GetDescendants(game)))
 end
 
 -- create a button to clear all cached UIStrokes
