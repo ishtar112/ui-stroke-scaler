@@ -1,4 +1,4 @@
-# UIStrokeScaler — yet another UIScale scale implementation
+# UIStrokeScaler — yet another UIStroke scale implementation
 * 🔥 Blazingly fast
 * ⬇️ Minimal memory impact
 * 🤝 Convenient plugin tools
