@@ -7,7 +7,7 @@
 [Get the latest release here](https://github.com/ishtar112/ui-stroke-scaler/releases/tag/stable) • [Install the plugin](https://github.com/ishtar112/ui-stroke-scaler/releases/download/stable/UIStrokeScaler.rbxm) • [Install the demo](https://github.com/ishtar112/ui-stroke-scaler/releases/download/stable/UIStrokeScalerDemo.rbxl)
 
 # How to Install
-1. [Download the .rbxm](https://github.com/ishtar112/ui-stroke-scaler/releases/download/stable/UIStrokeScaler.rbxm)
+1. [Download the .rbxmx](https://github.com/ishtar112/ui-stroke-scaler/releases/download/stable/UIStrokeScaler.rbxmx)
 2. Install it as a Local Plugin in Roblox Studio
 
 Do **not** copy and paste the raw source code — the client script is meant to be installed by the plugin.
