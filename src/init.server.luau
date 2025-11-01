@@ -14,56 +14,26 @@
 local TAG = "@scaled" -- tag applied to scaled UIStrokes
 local ATTRIBUTE = "scale" -- UIStroke attribute used to calculate thickness
 
-local ADJUSTER = script.Parent:FindFirstChild("UIStrokeScaler")
-local ADJUSTER_PARENT = game:GetService('StarterPlayer'):FindFirstChild('StarterPlayerScripts')
-
-local ContextualApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+local DEFAULT_ADJUSTER_PARENT = game:GetService('StarterPlayer'):FindFirstChild('StarterPlayerScripts')
 
 local SelectionService = game:GetService("Selection")
 local CollectionService = game:GetService("CollectionService")
 local StarterGui = game:GetService("StarterGui")
 local PluginGuiService = game:GetService("PluginGuiService")
-	
-local TOOLBAR = plugin:CreateToolbar("UIStrokeScaler")
 
-local IsA = script.IsA
-local AddTag = script.AddTag
-local RemoveTag = script.RemoveTag
-local SetAttribute = script.SetAttribute
-local IsDescendantOf = script.IsDescendantOf
-local GetDescendants = script.GetDescendants
-local FindFirstChildWhichIsA = script.FindFirstChildWhichIsA
+local Adjuster = script.Parent.UIStrokeScaler
+local Toolbar = plugin:CreateToolbar("UIStrokeScaler")
 
-@native local function getUIStrokes( instances: { Instance } ): ...UIStroke
-	local len = #instances
-	
-	if len > 0 then
-		for i = len, 1, -1 do
-			if instances[i].ClassName == "UIStroke" then
-				continue
-			end
-			
-			instances[i] = instances[len]
-			instances[len] = nil
-			
-			len -= 1
-		end
-	end
-	
-	return unpack(instances :: any)
-end
-
-local function clearCache()
-	local strokes = { getUIStrokes(CollectionService:GetTagged(TAG)) }
+local function clear_cache()
 	local n: number
 	
-	if next(strokes) == nil then
-		return
-	end
-	
-	for i, stroke in strokes do
-		RemoveTag(stroke, TAG)
-		SetAttribute(stroke, ATTRIBUTE, nil)
+	for i, stroke in CollectionService:GetTagged(TAG) do
+		if stroke.ClassName ~= "UIStroke" then
+			continue
+		end
+		
+		stroke:RemoveTag(TAG)
+		stroke:SetAttribute(ATTRIBUTE, nil)
 		
 		n = i
 	end
@@ -71,22 +41,58 @@ local function clearCache()
 	print(`Cleared {n} UIStrokes`)
 end
 
-local function insertAdjuster()
-	local adjuster = ADJUSTER:Clone()
+local function insert_adjuster()
+	local adjuster = Adjuster:Clone()
 	local source = adjuster.Source
 		:gsub("@@TAG", TAG) -- insert specified tag
 		:gsub("@@ATTRIBUTE", ATTRIBUTE) -- insert specified attribute
 	
 	adjuster.Source  = source
-	adjuster.Parent  = ADJUSTER_PARENT
+	adjuster.Parent  = DEFAULT_ADJUSTER_PARENT
 	adjuster.Enabled = true
 end
 
-local function isTextObject( instance: Instance ): boolean
-	return instance.ClassName == "TextLabel" or instance.ClassName == "TextButton" or instance.ClassName == "TextBox"
+--[[
+	Returns a boolean indicating whether or not the given Instance is a valid parent.
+	"Valid" in this context means an Instance that is not a descendant of an invalid directory and that a UIStroke can actually render on.
+	
+	@param Instance? instance
+	@return boolean
+]]
+local function is_valid_parent( instance: Instance? ): boolean
+	if instance == nil then
+		return false
+	elseif not instance:IsA("GuiObject") then
+		return false
+	elseif instance:IsDescendantOf(PluginGuiService) then
+		return false
+	else
+		return true
+	end
 end
 
-local function cacheUIStrokes( ...: UIStroke )
+--[[
+	Returns the shortest side of the given GuiObject based on the given Enum.ApplyStrokeMode.
+	
+	@param GuiObject object
+	@param Enum.ApplyStrokeMode mode: determines whether frame size or text size should be used
+	@return number
+]]
+local function get_shortest_side( object: GuiObject, mode: Enum.ApplyStrokeMode ): number
+	local is_text_object =
+		object.ClassName == "TextLabel"
+		or object.ClassName == "TextButton"
+		or object.ClassName == "TextBox"
+	
+	local bounds = if is_text_object and mode == Enum.ApplyStrokeMode.Contextual then
+		(object :: TextLabel).TextBounds
+		else
+		object.AbsoluteSize
+	
+	return math.min(bounds.X, bounds.Y)
+end
+
+local function cache( ...: UIStroke )
 	if select("#", ...) == 0 then
 		return
 	end
@@ -97,24 +103,16 @@ local function cacheUIStrokes( ...: UIStroke )
 		local stroke = select(i, ...) :: UIStroke
 		local parent = stroke.Parent
 		
-		if parent == nil then
-			continue
-		elseif not IsA(parent, "GuiObject") then
-			continue
-		elseif IsDescendantOf(stroke, PluginGuiService) then
+		if stroke.ClassName ~= "UIStroke" then
 			continue
 		end
 		
-		local bounds = if isTextObject(parent) and stroke.ApplyStrokeMode == ContextualApplyStrokeMode then
-			(parent :: TextLabel).TextBounds
-			else
-			(parent :: GuiObject).AbsoluteSize
+		if not is_valid_parent(parent) then
+			continue
+		end
 		
-		local denominator = math.min(bounds.X, bounds.Y)
-		local scale = stroke.Thickness / denominator
-		
-		AddTag(stroke, TAG)
-		SetAttribute(stroke, ATTRIBUTE, scale)
+		stroke:AddTag(TAG)
+		stroke:SetAttribute(ATTRIBUTE, stroke.Thickness / get_shortest_side(parent :: GuiObject, stroke.ApplyStrokeMode))
 		
 		n += 1
 	end
@@ -122,15 +120,15 @@ local function cacheUIStrokes( ...: UIStroke )
 	print(`Cached {n} UIStrokes`)
 end
 
-local function cacheCached()
-	cacheUIStrokes(getUIStrokes(CollectionService:GetTagged(TAG)))
+local function update_cached()
+	cache(unpack(CollectionService:GetTagged(TAG)))
 end
 
-local function cacheSelected()
-	cacheUIStrokes(getUIStrokes(SelectionService:Get()))
+local function cache_selected()
+	cache(unpack(SelectionService:Get()))
 end
 
-local function cacheDescendants()
+local function cache_descendants()
 	local selected = SelectionService:Get()
 	local instances = table.clone(selected)
 	
@@ -139,79 +137,72 @@ local function cacheDescendants()
 	end
 	
 	for _, instance in selected do
-		if FindFirstChildWhichIsA(instance, "UIStroke", true) == nil then
+		if instance:FindFirstChildWhichIsA("UIStroke", true) == nil then
 			continue
 		end
 		
-		for _, descendant in GetDescendants(instance) do
+		for _, descendant in instance:GetDescendants() do
 			table.insert(instances, descendant)
 			-- kind of crude b/c we aren't preventing duplicate entries, but oh well
 		end
 	end
 	
-	cacheUIStrokes(getUIStrokes(instances))
+	cache(unpack(instances))
 end
 
-local function cacheStarterGui()
-	cacheUIStrokes(getUIStrokes(GetDescendants(StarterGui)))
+local function cache_StarterGui()
+	cache(unpack(StarterGui:GetDescendants()))
 end
 
-local function cacheAll()
-	cacheUIStrokes(getUIStrokes(GetDescendants(game)))
+local function cache_all()
+	cache(unpack(game:GetDescendants()))
 end
 
--- create a button to clear all cached UIStrokes
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"clearCache",
 	"Clears all cached UIStrokes.",
 	"rbxassetid://76522587651332",
 	"Clear"
-).Click:Connect(clearCache)
+).Click:Connect(clear_cache)
 
--- create button to insert auto-adjustment LocalScript
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"insertAdjuster",
 	"Inserts a LocalScript that will automatically adjust cached UIStrokes.",
 	"rbxassetid://129100543703343",
 	"Insert"
-).Click:Connect(insertAdjuster)
+).Click:Connect(insert_adjuster)
 
--- create button to update all cached UIStrokes
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"cacheCached",
 	"Updates all cached UIStrokes.",
 	"rbxassetid://87419413098446",
 	"Cached"
-).Click:Connect(cacheCached)
+).Click:Connect(update_cached)
 
--- create button to cache the actively selected UIStrokes
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"cacheSelected",
 	"Caches currently selected UIStrokes.",
 	"rbxassetid://87419413098446",
 	"Selection"
-).Click:Connect(cacheSelected)
+).Click:Connect(cache_selected)
 
--- create button to cache descendant UIStrokes of any actively selected Instance
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"cacheDescendants",
 	"Caches any UIStrokes that are a descendant of any currently selected Instance.",
 	"rbxassetid://87419413098446",
 	"Descendants"
-).Click:Connect(cacheDescendants)
+).Click:Connect(cache_descendants)
 
--- create button to cache all UIStrokes in StarterGui
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"cacheStarterGui",
 	"Caches all UIStrokes under StarterGui.",
 	"rbxassetid://87419413098446",
 	"StarterGui"
-).Click:Connect(cacheStarterGui)
+).Click:Connect(cache_StarterGui)
 
--- create button to cache all all UIStrokes in the datamodel
-TOOLBAR:CreateButton(
+Toolbar:CreateButton(
 	"cacheAll",
 	"Caches all UIStrokes in the game.",
 	"rbxassetid://87419413098446",
 	"All"
-).Click:Connect(cacheAll)
+).Click:Connect(cache_all)
