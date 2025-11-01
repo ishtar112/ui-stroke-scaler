@@ -23,30 +23,40 @@ local PLACEHOLDER_SCALE  = newproxy() :: number
 local PLACEHOLDER_PARENT = newproxy() :: Instance
 local PLACEHOLDER_FACTOR = newproxy() :: number
 
-local ContextualApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
 
-local PlayerGui = script:FindFirstAncestorOfClass("Player"):FindFirstChild("PlayerGui")
-
-local IsA = script.IsA
-local GetAttribute = script.GetAttribute
-local GetAttributeChangedSignal = script.GetAttributeChangedSignal
-local GetPropertyChangedSignal = script.GetPropertyChangedSignal
-local IsDescendantOf = script.IsDescendantOf
-local FindFirstAncestorWhichIsA = script.FindFirstAncestorWhichIsA
+local PlayerGui = game:GetService("Players").LocalPlayer.PlayerGui
 
 local array = {} :: { any }
 -- { UIStroke, number (scale), GuiObject (parent), number (factor), repeat... }
--- using a single array to maximize cache efficiency in render step
+-- using a single array to maximize cache efficiency in render step (overengineering!)
 
-local function getShortestLength( object: GuiObject, stroke_mode: Enum.ApplyStrokeMode ): number
-	local is_text_object = object.ClassName == "TextLabel"
+--[[
+	Returns a boolean indicating whether or not the given Instance is a valid parent.
+	"Valid" in this context means something that a UIStroke can actually render onto.
+	
+	@param Instance? instance
+	@return boolean
+]]
+local function is_valid_parent( instance: Instance? ): boolean
+	return typeof(instance) == "Instance" and instance:IsA("GuiObject")
+end
+
+--[[
+	Returns the shortest side of the given GuiObject based on the given Enum.ApplyStrokeMode.
+	
+	@param GuiObject object
+	@param Enum.ApplyStrokeMode mode: determines whether frame size or text size should be used
+	@return number
+]]
+local function get_shortest_side( object: GuiObject, mode: Enum.ApplyStrokeMode ): number
+	local is_text_object =
+		object.ClassName == "TextLabel"
 		or object.ClassName == "TextButton"
 		or object.ClassName == "TextBox"
 	
-	local bounds = if is_text_object and stroke_mode == ContextualApplyStrokeMode then
+	local bounds = if is_text_object and mode == Enum.ApplyStrokeMode.Contextual then
 		(object :: TextLabel).TextBounds
 		else
 		object.AbsoluteSize
@@ -54,18 +64,19 @@ local function getShortestLength( object: GuiObject, stroke_mode: Enum.ApplyStro
 	return math.min(bounds.X, bounds.Y)
 end
 
-local function isValidParent( instance: Instance? ): boolean
-	return typeof(instance) == "Instance" and IsA(instance, "GuiObject")
-end
-
+--[[
+	Collects the given UIStrokes.
+	
+	@param ...Instance
+]]
 local function collect( ...: Instance )
 	if select("#", ...) == 0 then
 		return
 	end
 	
 	for i = 1, select("#", ...) do
-		local stroke = select(i, ...) :: UIStroke -- asserted b/c `select` is Wonky
-		local scale  = GetAttribute(stroke, ATTRIBUTE) :: number
+		local stroke = select(i, ...) :: UIStroke
+		local scale  = stroke:GetAttribute(ATTRIBUTE) :: number
 		local parent = stroke.Parent
 		
 		if stroke.ClassName ~= "UIStroke" then
@@ -77,11 +88,11 @@ local function collect( ...: Instance )
 			scale = PLACEHOLDER_SCALE
 		end
 		
-		if not isValidParent(parent) then
+		if not is_valid_parent(parent) then
 			parent = PLACEHOLDER_PARENT
 		end
 		
-		GetAttributeChangedSignal(stroke, ATTRIBUTE):Connect(function()
+		stroke:GetAttributeChangedSignal(ATTRIBUTE):Connect(function()
 			local index = table.find(array, stroke) :: number
 			
 			if index == nil then
@@ -91,7 +102,7 @@ local function collect( ...: Instance )
 				return
 			end
 			
-			local scale = GetAttribute(stroke, ATTRIBUTE)
+			local scale = stroke:GetAttribute(ATTRIBUTE)
 			
 			if type(scale) == "number" then
 				array[index + 1] = scale
@@ -100,7 +111,7 @@ local function collect( ...: Instance )
 			end
 		end)
 		
-		GetPropertyChangedSignal(stroke, "Parent"):Connect(function()
+		stroke:GetPropertyChangedSignal("Parent"):Connect(function()
 			local index = table.find(array, stroke) :: number
 			
 			if index == nil then
@@ -112,7 +123,7 @@ local function collect( ...: Instance )
 			
 			local parent = stroke.Parent
 			
-			if isValidParent(parent) then
+			if is_valid_parent(parent) then
 				array[index + 2] = parent
 				array[index + 3] = PLACEHOLDER_FACTOR -- trigger update next render step
 			else
@@ -142,17 +153,17 @@ RunService.PreSimulation:Connect(function()
 		end
 		
 		-- make sure stroke is actually visible
-		if not IsDescendantOf(stroke, PlayerGui) then
+		if not stroke:IsDescendantOf(PlayerGui) then
 			continue
-		elseif FindFirstAncestorWhichIsA(stroke, "LayerCollector") == nil then
+		elseif stroke:FindFirstAncestorWhichIsA("LayerCollector") == nil then
 			continue
-		elseif not FindFirstAncestorWhichIsA(stroke, "LayerCollector").Enabled then
+		elseif not stroke:FindFirstAncestorWhichIsA("LayerCollector").Enabled then
 			continue
 		elseif not parent.Visible then
 			continue
 		end
 		
-		local factor = getShortestLength(parent, stroke.ApplyStrokeMode)
+		local factor = get_shortest_side(parent, stroke.ApplyStrokeMode)
 		local cached_factor = array[i + 3]
 		
 		if factor == cached_factor then
@@ -170,8 +181,7 @@ CollectionService:GetInstanceRemovedSignal(TAG):Connect(@native function( instan
 	local index = table.find(array, instance)
 	
 	if index == nil then
-		-- shouldn't be possible
-		-- but rather safe than sorry
+		-- shouldn't be possible but rather safe than sorry
 		return
 	end
 	
