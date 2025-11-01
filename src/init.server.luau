@@ -24,6 +24,9 @@ local PluginGuiService = game:GetService("PluginGuiService")
 local Adjuster = script.Parent.UIStrokeScaler
 local Toolbar = plugin:CreateToolbar("UIStrokeScaler")
 
+--[[
+	Removes artifacts from any cached UIStrokes, thus removing them from the cache.
+]]
 local function clear_cache()
 	local n: number
 	
@@ -41,6 +44,9 @@ local function clear_cache()
 	print(`Cleared {n} UIStrokes`)
 end
 
+--[[
+	Inserts a copy of the plugin's LocalScript counterpart.
+]]
 local function insert_adjuster()
 	local adjuster = Adjuster:Clone()
 	local source = adjuster.Source
@@ -92,6 +98,11 @@ local function get_shortest_side( object: GuiObject, mode: Enum.ApplyStrokeMode 
 	return math.min(bounds.X, bounds.Y)
 end
 
+--[[
+	Caches the given UIStrokes.
+	
+	@param ...UIStroke
+]]
 local function cache( ...: UIStroke )
 	if select("#", ...) == 0 then
 		return
@@ -120,14 +131,23 @@ local function cache( ...: UIStroke )
 	print(`Cached {n} UIStrokes`)
 end
 
+--[[
+	Updates all cached UIStrokes.
+]]
 local function update_cached()
 	cache(unpack(CollectionService:GetTagged(TAG)))
 end
 
+--[[
+	Caches any selected UIStrokes.
+]]
 local function cache_selected()
 	cache(unpack(SelectionService:Get()))
 end
 
+--[[
+	Caches any UIStrokes who are a descendant of any selected Instance.
+]]
 local function cache_descendants()
 	local selected = SelectionService:Get()
 	local instances = table.clone(selected)
@@ -150,10 +170,16 @@ local function cache_descendants()
 	cache(unpack(instances))
 end
 
+--[[
+	Caches any UIStrokes who are a descendant of StarterGui.
+]]
 local function cache_StarterGui()
 	cache(unpack(StarterGui:GetDescendants()))
 end
 
+--[[
+	Caches all UIStrokes in the game.
+]]
 local function cache_all()
 	cache(unpack(game:GetDescendants()))
 end
